@@ -1,0 +1,52 @@
+
+
+CREATE COMPUTE MODULE createTransaction_Compute
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		-- CALL CopyMessageHeaders();
+		-- CALL CopyEntireMessage();
+		
+		-- 1. Copy Message Headers (Properties and MQMD). This is critical so MQ knows the format is JSON
+		SET OutputRoot.Properties = InputRoot.Properties;
+        SET OutputRoot.Properties.MessageType = '';
+        SET OutputRoot.Properties.MessageFormat = 'JSON';
+        
+        -- 2. Create a fresh MQMD if one doesn't exist
+        IF NOT EXISTS(OutputRoot.MQMD[]) THEN
+            CREATE NEXTSIBLING OF OutputRoot.Properties DOMAIN 'MQMD';
+        END IF;
+        
+		-- 3. Map the Data
+        -- Sample message
+        -- {
+        --   "accountId": "ACC-77441122",
+        --   "transactionType": "TRANSFER",
+        --   "amount": 1250.75,
+        --   "currency": "AUD"
+		-- }
+		
+        DECLARE inputJSONDataRef REFERENCE TO InputRoot.JSON.Data;
+        SET OutputRoot.JSON.Data.TransactionId = UUIDASCHAR;
+        DECLARE outputJSONDataRef REFERENCE TO OutputRoot.JSON.Data;
+        SET outputJSONDataRef.AccountId = inputJSONDataRef.accountId;
+        SET outputJSONDataRef.TransactionType = inputJSONDataRef.transactionType;
+        SET outputJSONDataRef.Amount = inputJSONDataRef.amount;
+        SET outputJSONDataRef.Currency = inputJSONDataRef.currency;
+        SET outputJSONDataRef.TransactionTimestamp = CURRENT_TIMESTAMP;
+		RETURN TRUE;
+	END;
+
+	CREATE PROCEDURE CopyMessageHeaders() BEGIN
+		DECLARE I INTEGER 1;
+		DECLARE J INTEGER;
+		SET J = CARDINALITY(InputRoot.*[]);
+		WHILE I < J DO
+			SET OutputRoot.*[I] = InputRoot.*[I];
+			SET I = I + 1;
+		END WHILE;
+	END;
+
+	CREATE PROCEDURE CopyEntireMessage() BEGIN
+		SET OutputRoot = InputRoot;
+	END;
+END MODULE;
